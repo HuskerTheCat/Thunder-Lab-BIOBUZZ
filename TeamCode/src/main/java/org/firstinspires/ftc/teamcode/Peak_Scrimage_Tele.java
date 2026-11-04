@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -25,12 +26,22 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     DcMotor LeftRear = hardwareMap.get(DcMotor.class, "LeftRearAsDcMotor");
     DcMotor RightRear = hardwareMap.get(DcMotor.class, "RightRearAsDcMotor");
     DcMotor RightFront = hardwareMap.get(DcMotor.class, "RightFrontAsDcMotor");
-    Servo Turret = hardwareMap.get(Servo.class, "turret");
+    DcMotor Turret = hardwareMap.get(DcMotor.class, "Turret");
+    Servo FlowerIntake = hardwareMap.get(Servo.class, "FlowerIntake");
+    float FlowerIntakeUpPos = 0;
+    float FlowerIntakeDownPos = 120;
+    DcMotor Flywheel = hardwareMap.get(DcMotor.class, "Flywheel");
+    double flywheelVelocity = 1000;
+    DcMotor Intake = hardwareMap.get(DcMotor.class, "Intake");
+
 
     IMU imu = hardwareMap.get(IMU.class, "imu");
 
     ElapsedTime MatchTime;
     double ElapsedTimePeriod;
+    float throttle = 1f;
+
+    final float TurretGearRatio = 27.0f / 100.0f;
     @Override
     public void runOpMode() {
         InitializeMotors();
@@ -46,29 +57,69 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         RightFront.setDirection(DcMotor.Direction.FORWARD);
         RightRear.setDirection(DcMotor.Direction.REVERSE);
         //Launcher.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        Turret.scaleRange(0.2f, 0.8);
+        Turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
 
         waitForStart();
         while(opModeIsActive()){
+            if (gamepad1.right_bumper||gamepad2.right_bumper){
+                throttle = 2f;
+            }else if(gamepad1.left_bumper||gamepad2.left_bumper){
+                throttle = 0.5f;
+            } else {
+                throttle = 1f;
+            }
+
+
             float deadZone = 0.01f;
             //use the joysticks on either controller to move the robot, with priority going to gamepad 1
             //maybe controller priority can be moved to a function with lookup table per interaction?
-            RobotCentricDrive((Math.abs(gamepad1.left_stick_y)>deadZone?gamepad1:gamepad2).left_stick_y, //forward/backward
-                    (Math.abs(gamepad1.left_stick_x)>deadZone?gamepad1:gamepad2).left_stick_x,//strafe
-                    (Math.abs(gamepad1.right_stick_x)>deadZone?gamepad1:gamepad2).right_stick_x);//rotation
+            RobotCentricDrive(
+                    (
+                            (
+                                    Math.abs(
+                                            gamepad1.left_stick_y
+                                    )>deadZone?gamepad1:gamepad2
+                            ).left_stick_y
+                    ) * throttle, //forward/backward
+                    ((Math.abs(gamepad1.left_stick_x)>deadZone?gamepad1:gamepad2).left_stick_x)*throttle ,//strafe
+                    ((Math.abs(gamepad1.right_stick_x)>deadZone?gamepad1:gamepad2).right_stick_x)*throttle);//rotation
 
             //basic turret rotation with priority on controller 1
             //if both are pressed just stops, eventualy will go with whichever bumper was pressed most recently
             if(gamepad2.right_bumper&&!gamepad2.left_bumper){
-                Turret.setPosition(Turret.getPosition()+0.01);
+                Turret.setTargetPosition(Turret.getCurrentPosition()+5);
             } else if (gamepad2.left_bumper&&!gamepad2.right_bumper) {
-                Turret.setPosition(Turret.getPosition()-0.01);
+                Turret.setTargetPosition(Turret.getCurrentPosition()-5);
             } else if (gamepad1.right_bumper&&!gamepad1.left_bumper) {
-                Turret.setPosition(Turret.getPosition()+0.01);
+                Turret.setTargetPosition(Turret.getCurrentPosition()+5);
             } else if (gamepad1.left_bumper&&!gamepad1.right_bumper) {
-                Turret.setPosition(Turret.getPosition()-0.01);
+                Turret.setTargetPosition(Turret.getCurrentPosition()-5);
             }
 
+            //intake/outake, priority on controller
+            if(gamepad1.cross||gamepad2.cross){
+                Intake.setPower(0.8);
+            }
+            else if(gamepad2.circle||gamepad1.circle){
+                Intake.setPower(-0.8);
+            }
+            if(gamepad1.dpad_left||gamepad2.dpad_left) {
+                //toggles flywheel velocity from 0 to full speed
+                ((DcMotorEx) Flywheel).setPower((((DcMotorEx) Flywheel).getVelocity()!=0)?0:flywheelVelocity);
+            }
+            if(gamepad1.dpad_down||gamepad2.dpad_down){
+                FlowerIntake.setPosition(FlowerIntakeDownPos);
+            }else if (gamepad1.dpad_up||gamepad2.dpad_up){
+                FlowerIntake.setPosition(FlowerIntakeUpPos);
+            }
+
+            //launch sequence
+            if(gamepad1.square||gamepad2.square){
+                //insert launcher feeding code here after the physical design is finalized
+
+
+            }
 
         }
     }
@@ -134,6 +185,6 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         // Motor encoder
     }
     void InitalizeIMU(){
-
+        //to add later with April Tag stuff
     }
 }
