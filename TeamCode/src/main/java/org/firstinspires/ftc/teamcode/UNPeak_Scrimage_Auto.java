@@ -1,15 +1,14 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 
-@Autonomous(name = "Peak Scrimage Auto", group = "Auto",preselectTeleOp = "PEAK SCRIMMAGE TELE")
+//name has to be different from Peak_Scrimage_Auto or the robot app reports a duplicate
+@Autonomous(name = "UNPeak Scrimage Auto", group = "Auto",preselectTeleOp = "PEAK SCRIMMAGE TELE")
 public class UNPeak_Scrimage_Auto extends LinearOpMode {
     DcMotor LeftFront;
     DcMotor LeftRear;
@@ -26,6 +25,9 @@ public class UNPeak_Scrimage_Auto extends LinearOpMode {
     final double flywheelVelocity = 1000; //encoder ticks per second
     final double TurretPower = 0.4;
     final double IntakePower = 0.8;
+
+    //about one wheel turn on a goBILDA 312rpm motor (537.7 ticks/rev), tune on the robot
+    final int DriveDistanceTicks = 540;
 
     boolean blueAlliance = true;
     public void runOpMode(){
@@ -48,17 +50,24 @@ public class UNPeak_Scrimage_Auto extends LinearOpMode {
         LeftRear.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         RightFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         RightRear.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        // same directions as Peak_Scrimage_Tele
+        LeftFront.setDirection(DcMotor.Direction.REVERSE);
+        LeftRear.setDirection(DcMotor.Direction.REVERSE);
+        RightFront.setDirection(DcMotor.Direction.FORWARD);
+        RightRear.setDirection(DcMotor.Direction.REVERSE); //check on robot, usually both right motors are FORWARD
         while(opModeInInit()){
 
             telemetry.addLine("Select with dpad");
             blueAlliance = (gamepad1.dpad_left||gamepad2.dpad_left) || (blueAlliance && !(gamepad1.dpad_right||gamepad2.dpad_right));
 
             telemetry.addLine("Alliance: " + (blueAlliance ?"[Blue]":" Blue ") + " | " +(!blueAlliance ?"[Red]":" Red "));
+            telemetry.update();
         }
         waitForStart();
         double pos = LeftFront.getCurrentPosition();
 
-        while(!(pos+50<LeftFront.getCurrentPosition())&&opModeIsActive()){
+        //abs so it still stops if the encoder counts the other way
+        while(Math.abs(LeftFront.getCurrentPosition()-pos)<DriveDistanceTicks&&opModeIsActive()){
             MecanumDrive(0.5, 0.5, 0);
         }
         MecanumDrive(0,0,0);

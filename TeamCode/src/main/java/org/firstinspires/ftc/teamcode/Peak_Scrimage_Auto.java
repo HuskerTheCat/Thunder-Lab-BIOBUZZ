@@ -6,7 +6,6 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
-import com.pedropathing.follower.Follower;
 import com.pedropathing.math.Pose;
 
 @Autonomous(name = "Peak Scrimage Auto", group = "Auto",preselectTeleOp = "PEAK SCRIMMAGE TELE")
@@ -34,6 +33,7 @@ public class Peak_Scrimage_Auto extends LinearOpMode {
             blueAlliance = (gamepad1.dpad_left||gamepad2.dpad_left) || (blueAlliance && !(gamepad1.dpad_right||gamepad2.dpad_right));
 
             telemetry.addLine("Alliance: " + (blueAlliance ?"[Blue]":" Blue ") + " | " +(!blueAlliance ?"[Red]":" Red "));
+            telemetry.update();
         }
         waitForStart();
         final Pose[] poses = {

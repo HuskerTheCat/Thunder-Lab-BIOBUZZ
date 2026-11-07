@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.robotcore.external.JavaUtil;
 @TeleOp(name = "PEAK SCRIMMAGE TELE", group = "Competition")
@@ -31,9 +32,10 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     final double FlowerIntakeServoRangeDeg = 270;
     final double FlowerIntakeUpPos = 0 / FlowerIntakeServoRangeDeg;
     final double FlowerIntakeDownPos = 120 / FlowerIntakeServoRangeDeg;
-    final double LaunchServoUpPos = 120;
-    final double LaunchServoDownPos = 0;
-    final double flywheelVelocity = 1000; //encoder ticks per second
+    final double LaunchServoRangeDeg = 270;
+    final double LaunchServoUpPos = 120 / LaunchServoRangeDeg;
+    final double LaunchServoDownPos = 0 / LaunchServoRangeDeg;
+    final double FlowerInitStep = 0.005; //servo position change per loop when adjusting during init
     final double TurretPower = 0.4;
     final double IntakePower = 0.8;
 
@@ -52,28 +54,33 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
 
     double LOAD_TIME = 0.5;   // sec arm sits down while feeders load a ball
     double UP_TIME   = 0.4;   // sec arm sits up (lift + launch)
-    double FLYWHEEL_TARGET = 500;
-    double FLYWHEEL_TOLERANCE = 20;
+    double FLYWHEEL_TARGET = 500; //encoder ticks per second, used by both the dpad toggle and the launch sequence
+    double FLYWHEEL_TOLERANCE = 60; //measured velocity wobbles, too tight and the arm never lifts
     @Override
     public void runOpMode() {
         InitializeMotors();
         InitalizeIMU();
+        //servo positions are 0-1, so nudge a small step each loop instead of +-1
+        double flowerInitPos = FlowerIntakeUpPos;
         while(opModeInInit()) {
             telemetry.addLine("LaunchServo pos: " + LaunchServo.getPosition());
-            telemetry.addLine("FlowerServo pos: " + FlowerIntake.getPosition());
+            telemetry.addLine("FlowerServo pos: " + flowerInitPos);
             telemetry.addLine("turret pos: " + Turret.getCurrentPosition());
             telemetry.update();
-            if(gamepad1.dpad_down)FlowerIntake.setPosition(FlowerIntake.getPosition()-1);
-            if(gamepad1.dpad_up)FlowerIntake.setPosition(FlowerIntake.getPosition()+1);
+            if(gamepad1.dpad_down||gamepad1.dpad_up){
+                flowerInitPos += gamepad1.dpad_up?FlowerInitStep:-FlowerInitStep;
+                flowerInitPos = Range.clip(flowerInitPos, 0, 1);
+                FlowerIntake.setPosition(flowerInitPos);
+            }
         }
         waitForStart();
         while(opModeIsActive()){
             if (gamepad1.right_trigger>0.5||gamepad2.right_trigger>0.5){
-                throttle = 1;
+                throttle = FastThrottle;
             }else if(gamepad1.left_trigger>0.5||gamepad2.left_trigger>0.5){
-                throttle = 0.4;
+                throttle = SlowThrottle;
             } else {
-                throttle = 0.7;
+                throttle = NormalThrottle;
             }
 
 
@@ -119,7 +126,7 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             boolean flywheelButton = gamepad1.dpad_left||gamepad2.dpad_left;
             if(flywheelButton&&!lastFlywheelButton) {
                 flywheelOn = !flywheelOn;
-                Flywheel.setVelocity(flywheelOn?flywheelVelocity:0);
+                Flywheel.setVelocity(flywheelOn?FLYWHEEL_TARGET:0);
             }
             lastFlywheelButton = flywheelButton;
 
@@ -177,8 +184,8 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                 }
 
             } else {
-                // button released: reset everything
-                Flywheel.setVelocity(0);
+                // button released: reset everything, flywheel goes back to whatever the dpad toggle says
+                Flywheel.setVelocity(flywheelOn?FLYWHEEL_TARGET:0);
                 LaunchServo.setPosition(LaunchServoDownPos);
                 FeedTop.setPower(0);
                 FeedBottom.setPower(0);
