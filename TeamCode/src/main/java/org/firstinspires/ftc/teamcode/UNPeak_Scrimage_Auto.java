@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode;
 import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
@@ -28,6 +29,17 @@ public class UNPeak_Scrimage_Auto extends LinearOpMode {
 
     boolean blueAlliance = true;
     public void runOpMode(){
+        LeftFront = hardwareMap.get(DcMotor.class, "LeftFront");
+        LeftRear = hardwareMap.get(DcMotor.class, "LeftRear");
+        RightRear = hardwareMap.get(DcMotor.class, "RightRear");
+        RightFront = hardwareMap.get(DcMotor.class, "RightFront");
+        Turret = hardwareMap.get(DcMotor.class, "Turret");
+        FlowerIntake = hardwareMap.get(Servo.class, "FlowerIntake");
+        Flywheel = hardwareMap.get(DcMotorEx.class, "Flywheel");
+        Intake = hardwareMap.get(DcMotor.class, "Intake");
+        //FeedTop = hardwareMap.get(CRServo.class, "TopFeed");
+        //FeedBottom = hardwareMap.get(CRServo.class, "BottomFeed");
+        //LaunchServo = hardwareMap.get(Servo.class, "launcherServo");
         LeftFront.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         LeftRear.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         RightFront.setMode(DcMotor.RunMode.RUN_USING_ENCODER);

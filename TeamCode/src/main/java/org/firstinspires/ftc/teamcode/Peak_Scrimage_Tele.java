@@ -63,6 +63,8 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             telemetry.addLine("FlowerServo pos: " + FlowerIntake.getPosition());
             telemetry.addLine("turret pos: " + Turret.getCurrentPosition());
             telemetry.update();
+            if(gamepad1.dpad_down)FlowerIntake.setPosition(FlowerIntake.getPosition()-1);
+            if(gamepad1.dpad_up)FlowerIntake.setPosition(FlowerIntake.getPosition()+1);
         }
         waitForStart();
         while(opModeIsActive()){
@@ -262,7 +264,7 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         RightFront.setDirection(DcMotor.Direction.FORWARD);
         RightRear.setDirection(DcMotor.Direction.REVERSE); //check on robot, usually both right motors are FORWARD
         // Motor encoders, setVelocity needs RUN_USING_ENCODER
-        Turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        //Turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         Flywheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
     }
     void InitalizeIMU(){
