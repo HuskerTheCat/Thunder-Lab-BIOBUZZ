@@ -1,10 +1,13 @@
 package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
+
 import org.firstinspires.ftc.robotcore.external.JavaUtil;
 @TeleOp(name = "PEAK SCRIMMAGE TELE", group = "Competition")
 public class Peak_Scrimage_Tele extends LinearOpMode{
@@ -16,6 +19,10 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     DcMotor RightFront;
     DcMotor Turret;
     Servo FlowerIntake;
+    CRServo FeedTop;
+
+    CRServo FeedBottom;
+    Servo LaunchServo;
     DcMotorEx Flywheel;
     DcMotor Intake;
     IMU imu;
@@ -24,6 +31,8 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     final double FlowerIntakeServoRangeDeg = 270;
     final double FlowerIntakeUpPos = 0 / FlowerIntakeServoRangeDeg;
     final double FlowerIntakeDownPos = 120 / FlowerIntakeServoRangeDeg;
+    final double LaunchServoUpPos = 120;
+    final double LaunchServoDownPos = 0;
     final double flywheelVelocity = 1000; //encoder ticks per second
     final double TurretPower = 0.4;
     final double IntakePower = 0.8;
@@ -38,19 +47,31 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     boolean lastFlywheelButton = false;
 
     final float TurretGearRatio = 27.0f / 100.0f;
+    ElapsedTime launchTimer = new ElapsedTime();
+    boolean armUp = false;
+
+    double LOAD_TIME = 0.5;   // sec arm sits down while feeders load a ball
+    double UP_TIME   = 0.4;   // sec arm sits up (lift + launch)
+    double FLYWHEEL_TARGET = 500;
+    double FLYWHEEL_TOLERANCE = 20;
     @Override
     public void runOpMode() {
         InitializeMotors();
         InitalizeIMU();
-
+        while(opModeInInit()) {
+            telemetry.addLine("LaunchServo pos: " + LaunchServo.getPosition());
+            telemetry.addLine("FlowerServo pos: " + FlowerIntake.getPosition());
+            telemetry.addLine("turret pos: " + Turret.getCurrentPosition());
+            telemetry.update();
+        }
         waitForStart();
         while(opModeIsActive()){
             if (gamepad1.right_trigger>0.5||gamepad2.right_trigger>0.5){
-                throttle = FastThrottle;
+                throttle = 1;
             }else if(gamepad1.left_trigger>0.5||gamepad2.left_trigger>0.5){
-                throttle = SlowThrottle;
+                throttle = 0.4;
             } else {
-                throttle = NormalThrottle;
+                throttle = 0.7;
             }
 
 
@@ -105,14 +126,63 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             }else if (gamepad1.dpad_up||gamepad2.dpad_up){
                 FlowerIntake.setPosition(FlowerIntakeUpPos);
             }
-
+/*
             //launch sequence
             if(gamepad1.square||gamepad2.square){
-                //insert launcher feeding code here after the physical design is finalized
 
-
+                Flywheel.setVelocity(500);
+                if (Flywheel.getVelocity() > 480){
+                    if(LaunchServo.getPosition()>=LaunchServoUpPos-3){
+                        LaunchServo.setPosition(LaunchServoDownPos);
+                    }else if(LaunchServo.getPosition() <= LaunchServoDownPos+3){
+                        LaunchServo.setPosition(LaunchServoUpPos);
+                        FeedTop.setPower(0.8);
+                        FeedBottom.setPower(0.8);
+                    }
+                    if(LaunchServo.getPosition()>= (LaunchServoUpPos/2)){
+                        FeedTop.setPower(0);
+                        FeedBottom.setPower(0);
+                    }
+                }
             }
+*/
+            if (gamepad1.square || gamepad2.square) {
 
+                Flywheel.setVelocity(FLYWHEEL_TARGET);
+                boolean flywheelReady = Math.abs(Flywheel.getVelocity() - FLYWHEEL_TARGET) < FLYWHEEL_TOLERANCE;
+
+                if (!armUp) {
+                    // ARM DOWN: load a ball
+                    LaunchServo.setPosition(LaunchServoDownPos);
+                    FeedTop.setPower(0.8);
+                    FeedBottom.setPower(0.8);
+
+                    // only lift once the ball has had time to load AND flywheel is up to speed
+                    if (launchTimer.seconds() >= LOAD_TIME && flywheelReady) {
+                        armUp = true;
+                        launchTimer.reset();
+                    }
+                } else {
+                    // ARM UP: feeders off, push ball into flywheel
+                    LaunchServo.setPosition(LaunchServoUpPos);
+                    FeedTop.setPower(0);
+                    FeedBottom.setPower(0);
+
+                    if (launchTimer.seconds() >= UP_TIME) {
+                        armUp = false;
+                        launchTimer.reset();
+                    }
+                }
+
+            } else {
+                // button released: reset everything
+                Flywheel.setVelocity(0);
+                LaunchServo.setPosition(LaunchServoDownPos);
+                FeedTop.setPower(0);
+                FeedBottom.setPower(0);
+                armUp = false;
+                launchTimer.reset();
+            }
             telemetry.addData("Throttle", throttle);
             telemetry.addData("Flywheel", flywheelOn?"On":"Off");
             telemetry.addData("Flywheel Velocity", Flywheel.getVelocity());
@@ -174,6 +244,9 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         FlowerIntake = hardwareMap.get(Servo.class, "FlowerIntake");
         Flywheel = hardwareMap.get(DcMotorEx.class, "Flywheel");
         Intake = hardwareMap.get(DcMotor.class, "Intake");
+        FeedTop = hardwareMap.get(CRServo.class, "TopFeed");
+        FeedBottom = hardwareMap.get(CRServo.class, "BottomFeed");
+        LaunchServo = hardwareMap.get(Servo.class, "launcherServo");
 
         // Set Drive Motors to Brake on Zero Power
         LeftFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
