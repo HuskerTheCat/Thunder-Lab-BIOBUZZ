@@ -4,6 +4,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -62,16 +63,18 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         InitalizeIMU();
         //servo positions are 0-1, so nudge a small step each loop instead of +-1
         double flowerInitPos = FlowerIntakeUpPos;
+
         while(opModeInInit()) {
             telemetry.addLine("LaunchServo pos: " + LaunchServo.getPosition());
-            telemetry.addLine("FlowerServo pos: " + flowerInitPos);
+            telemetry.addLine("FlowerServo pos: " + FlowerIntake.getPosition());
             telemetry.addLine("turret pos: " + Turret.getCurrentPosition());
-            telemetry.update();
+
             if(gamepad1.dpad_down||gamepad1.dpad_up){
                 flowerInitPos += gamepad1.dpad_up?FlowerInitStep:-FlowerInitStep;
                 flowerInitPos = Range.clip(flowerInitPos, 0, 1);
                 FlowerIntake.setPosition(flowerInitPos);
             }
+            telemetry.update();
         }
         waitForStart();
         while(opModeIsActive()){
@@ -263,13 +266,14 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         RightRear.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         RightFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         Turret.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        //Turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         // Let the flywheel coast down instead of slamming to a stop
         Flywheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         // Set Drive Motor Directions
-        LeftFront.setDirection(DcMotor.Direction.REVERSE);
+        LeftFront.setDirection(DcMotor.Direction.FORWARD);
         LeftRear.setDirection(DcMotor.Direction.REVERSE);
-        RightFront.setDirection(DcMotor.Direction.FORWARD);
-        RightRear.setDirection(DcMotor.Direction.REVERSE); //check on robot, usually both right motors are FORWARD
+        RightFront.setDirection(DcMotor.Direction.REVERSE);
+        RightRear.setDirection(DcMotor.Direction.FORWARD); //check on robot, usually both right motors are FORWARD
         // Motor encoders, setVelocity needs RUN_USING_ENCODER
         //Turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         Flywheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
