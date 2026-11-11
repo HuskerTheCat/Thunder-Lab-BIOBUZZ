@@ -31,8 +31,8 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
 
     //servo positions are 0-1, so convert from degrees using the servo's full range
     final double FlowerIntakeServoRangeDeg = 270;
-    final double FlowerIntakeUpPos = 0 / FlowerIntakeServoRangeDeg;
-    final double FlowerIntakeDownPos = 120 / FlowerIntakeServoRangeDeg;
+    final double FlowerIntakeUpPos = 0.35;
+    final double FlowerIntakeDownPos = 1;
     final double LaunchServoRangeDeg = 270;
     final double LaunchServoUpPos = 120 / LaunchServoRangeDeg;
     final double LaunchServoDownPos = 0 / LaunchServoRangeDeg;
@@ -62,18 +62,21 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         InitializeMotors();
         InitalizeIMU();
         //servo positions are 0-1, so nudge a small step each loop instead of +-1
-        double flowerInitPos = FlowerIntakeUpPos;
+        double launchInitPos = LaunchServoDownPos;
+        LaunchServo.setPosition(launchInitPos);
 
-        while(opModeInInit()) {
+
             telemetry.addLine("LaunchServo pos: " + LaunchServo.getPosition());
             telemetry.addLine("FlowerServo pos: " + FlowerIntake.getPosition());
             telemetry.addLine("turret pos: " + Turret.getCurrentPosition());
 
-            if(gamepad1.dpad_down||gamepad1.dpad_up){
-                flowerInitPos += gamepad1.dpad_up?FlowerInitStep:-FlowerInitStep;
-                flowerInitPos = Range.clip(flowerInitPos, 0, 1);
-                FlowerIntake.setPosition(flowerInitPos);
-            }
+            while (opModeInInit()) {
+                if (gamepad1.dpad_up || gamepad1.dpad_down) {
+                    launchInitPos += gamepad1.dpad_up ? FlowerInitStep : -FlowerInitStep;
+                    launchInitPos = Range.clip(launchInitPos, 0, 1);
+                    LaunchServo.setPosition(launchInitPos);
+                }
+
             telemetry.update();
         }
         waitForStart();
