@@ -33,9 +33,9 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     final double FlowerIntakeServoRangeDeg = 270;
     final double FlowerIntakeUpPos = 0 / FlowerIntakeServoRangeDeg;
     final double FlowerIntakeDownPos = 120 / FlowerIntakeServoRangeDeg;
-    final double LaunchServoRangeDeg = 270;
-    final double LaunchServoUpPos = 120 / LaunchServoRangeDeg;
-    final double LaunchServoDownPos = 0 / LaunchServoRangeDeg;
+    //1.0 is what the launcher was tested with (the old 120 got capped to 1.0)
+    final double LaunchServoUpPos = 1.0;
+    final double LaunchServoDownPos = 0.0;
     final double FlowerInitStep = 0.005; //servo position change per loop when adjusting during init
     final double TurretPower = 0.4;
     final double IntakePower = 0.8;
@@ -57,6 +57,7 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     double UP_TIME   = 0.4;   // sec arm sits up (lift + launch)
     double FLYWHEEL_TARGET = 500; //encoder ticks per second, used by both the dpad toggle and the launch sequence
     double FLYWHEEL_TOLERANCE = 60; //measured velocity wobbles, too tight and the arm never lifts
+    double MAX_SPINUP_WAIT = 1.5; // sec past LOAD_TIME to wait for the flywheel before lifting anyway
     @Override
     public void runOpMode() {
         InitializeMotors();
@@ -170,7 +171,9 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                     FeedBottom.setPower(0.8);
 
                     // only lift once the ball has had time to load AND flywheel is up to speed
-                    if (launchTimer.seconds() >= LOAD_TIME && flywheelReady) {
+                    // if the flywheel never reads up to speed (unplugged encoder), lift anyway so the arm doesn't get stuck
+                    boolean spinupTimedOut = launchTimer.seconds() >= LOAD_TIME + MAX_SPINUP_WAIT;
+                    if (launchTimer.seconds() >= LOAD_TIME && (flywheelReady || spinupTimedOut)) {
                         armUp = true;
                         launchTimer.reset();
                     }
@@ -198,6 +201,11 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             telemetry.addData("Throttle", throttle);
             telemetry.addData("Flywheel", flywheelOn?"On":"Off");
             telemetry.addData("Flywheel Velocity", Flywheel.getVelocity());
+            telemetry.addData("Flywheel Ready", Math.abs(Flywheel.getVelocity() - FLYWHEEL_TARGET) < FLYWHEEL_TOLERANCE);
+            telemetry.addData("Launch Arm", armUp?"Up":"Down");
+            telemetry.addData("LaunchServo pos", LaunchServo.getPosition());
+            telemetry.addData("FlowerServo pos", FlowerIntake.getPosition());
+            telemetry.addData("Feeders", "Top %.1f / Bottom %.1f", FeedTop.getPower(), FeedBottom.getPower());
             telemetry.addData("Turret Position", Turret.getCurrentPosition());
             telemetry.update();
         }
@@ -259,6 +267,9 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         FeedTop = hardwareMap.get(CRServo.class, "TopFeed");
         FeedBottom = hardwareMap.get(CRServo.class, "BottomFeed");
         LaunchServo = hardwareMap.get(Servo.class, "launcherServo");
+        // if the feeders fight each other (one pushes the ball in, the other out), flip one of these
+        FeedTop.setDirection(DcMotorSimple.Direction.FORWARD);
+        FeedBottom.setDirection(DcMotorSimple.Direction.FORWARD);
 
         // Set Drive Motors to Brake on Zero Power
         LeftFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
