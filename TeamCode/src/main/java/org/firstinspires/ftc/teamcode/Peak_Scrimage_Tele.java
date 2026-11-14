@@ -34,8 +34,8 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     final double FlowerIntakeUpPos = 0.35;
     final double FlowerIntakeDownPos = 1;
     final double LaunchServoRangeDeg = 270;
-    final double LaunchServoUpPos = 120 / LaunchServoRangeDeg;
-    final double LaunchServoDownPos = 0 / LaunchServoRangeDeg;
+    final double LaunchServoUpPos = 0.05;
+    final double LaunchServoDownPos = 0.22;
     final double FlowerInitStep = 0.005; //servo position change per loop when adjusting during init
     final double TurretPower = 0.4;
     final double IntakePower = 0.8;
@@ -53,30 +53,50 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     ElapsedTime launchTimer = new ElapsedTime();
     boolean armUp = false;
 
-    double LOAD_TIME = 0.5;   // sec arm sits down while feeders load a ball
-    double UP_TIME   = 0.4;   // sec arm sits up (lift + launch)
+    double LOAD_TIME = 0.8;   // sec arm sits down while feeders load a ball
+    double UP_TIME   = 0.2;   // sec arm sits up (lift + launch)
     double FLYWHEEL_TARGET = 500; //encoder ticks per second, used by both the dpad toggle and the launch sequence
-    double FLYWHEEL_TOLERANCE = 60; //measured velocity wobbles, too tight and the arm never lifts
+    double FLYWHEEL_TOLERANCE = 20; //measured velocity wobbles, too tight and the arm never lifts
+    boolean controller1IsNormal = false;
+    boolean controller2IsNormal = true;
     @Override
     public void runOpMode() {
         InitializeMotors();
         InitalizeIMU();
-        //servo positions are 0-1, so nudge a small step each loop instead of +-1
+
+            //telemetry.addLine("LaunchServo pos: " + LaunchServo.getPosition());
+            //telemetry.addLine("FlowerServo pos: " + FlowerIntake.getPosition());
+            //telemetry.addLine("turret pos: " + Turret.getCurrentPosition());
+            /*
+            while (opModeInInit()) {
+
+                telemetry.addLine("Controller Profiles");
+                telemetry.addLine("Driver: " + (controller1IsNormal?"<MILES Centric> ":"<NORMAL Centric> "));
+                if(gamepad1.dpad_left)controller1IsNormal=false;
+                if(gamepad1.dpad_right)controller1IsNormal=true;
+                telemetry.addLine("Co-Driver: " + (controller2IsNormal?"<MILES Centric> ":"<NORMAL Centric> "));
+                if(gamepad1.dpad_left)controller2IsNormal=false;
+                if(gamepad1.dpad_right)controller2IsNormal=true;
+
+
+
+
+            telemetry.update();
+            }
+*/
         double launchInitPos = LaunchServoDownPos;
         LaunchServo.setPosition(launchInitPos);
 
+        while (opModeInInit()) {
+            if (gamepad1.dpad_up || gamepad1.dpad_down) {
+                launchInitPos += gamepad1.dpad_up ? FlowerInitStep : -FlowerInitStep;
+                //launchInitPos = Range.clip(launchInitPos, 0, 1);
+                LaunchServo.setPosition(launchInitPos);
+            }
 
             telemetry.addLine("LaunchServo pos: " + LaunchServo.getPosition());
             telemetry.addLine("FlowerServo pos: " + FlowerIntake.getPosition());
             telemetry.addLine("turret pos: " + Turret.getCurrentPosition());
-
-            while (opModeInInit()) {
-                if (gamepad1.dpad_up || gamepad1.dpad_down) {
-                    launchInitPos += gamepad1.dpad_up ? FlowerInitStep : -FlowerInitStep;
-                    launchInitPos = Range.clip(launchInitPos, 0, 1);
-                    LaunchServo.setPosition(launchInitPos);
-                }
-
             telemetry.update();
         }
         waitForStart();
@@ -93,6 +113,13 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             float deadZone = 0.05f;
             //use the joysticks on either controller to move the robot, with priority going to gamepad 1
             //maybe controller priority can be moved to a function with lookup table per interaction?
+            /*
+            float forward = controller1IsNormal?gamepad1.right_stick_y
+            RobotCentricDrive(
+                    -((Math.abs(gamepad1.left_stick_y)>deadZone?gamepad1:gamepad2).left_stick_y) * throttle, //forward/backward, stick y is negative when pushed up
+                    -((Math.abs(gamepad1.left_stick_x)>deadZone?gamepad1:gamepad2).left_stick_x)*throttle ,//strafe
+                    -((Math.abs(gamepad1.right_stick_x)>deadZone?gamepad1:gamepad2).right_stick_x)*throttle);//rotation
+            */
             RobotCentricDrive(
                     -(
                             (
@@ -103,7 +130,6 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                     ) * throttle, //forward/backward, stick y is negative when pushed up
                     ((Math.abs(gamepad1.left_stick_x)>deadZone?gamepad1:gamepad2).left_stick_x)*throttle ,//strafe
                     ((Math.abs(gamepad1.right_stick_x)>deadZone?gamepad1:gamepad2).right_stick_x)*throttle);//rotation
-
             //basic turret rotation with priority on controller 2
             //if both are pressed just stops, eventualy will go with whichever bumper was pressed most recently
             if(gamepad2.right_bumper&&!gamepad2.left_bumper){
@@ -121,8 +147,7 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             //intake/outake, priority on controller
             if(gamepad1.cross||gamepad2.cross){
                 Intake.setPower(IntakePower);
-            }
-            else if(gamepad2.circle||gamepad1.circle){
+            } else if(gamepad2.circle||gamepad1.circle){
                 Intake.setPower(-IntakePower);
             } else {
                 Intake.setPower(0);
@@ -164,16 +189,19 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             if (gamepad1.square || gamepad2.square) {
 
                 Flywheel.setVelocity(FLYWHEEL_TARGET);
-                boolean flywheelReady = Math.abs(Flywheel.getVelocity() - FLYWHEEL_TARGET) < FLYWHEEL_TOLERANCE;
-
+                if(
+                        Math.abs(Flywheel.getVelocity() - FLYWHEEL_TARGET) < FLYWHEEL_TOLERANCE)
+                //true)
+                {
                 if (!armUp) {
                     // ARM DOWN: load a ball
                     LaunchServo.setPosition(LaunchServoDownPos);
+
                     FeedTop.setPower(0.8);
                     FeedBottom.setPower(0.8);
 
-                    // only lift once the ball has had time to load AND flywheel is up to speed
-                    if (launchTimer.seconds() >= LOAD_TIME && flywheelReady) {
+                    // only lift once the ball has had time to load AND flywheel is up to speed   flywheelReady
+                    if (launchTimer.seconds() >= LOAD_TIME) {
                         armUp = true;
                         launchTimer.reset();
                     }
@@ -187,6 +215,7 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                         armUp = false;
                         launchTimer.reset();
                     }
+                }
                 }
 
             } else {
@@ -273,6 +302,8 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         // Let the flywheel coast down instead of slamming to a stop
         Flywheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         // Set Drive Motor Directions
+        Flywheel.setDirection(DcMotorSimple.Direction.REVERSE);
+        Intake.setDirection(DcMotorSimple.Direction.REVERSE);
         LeftFront.setDirection(DcMotor.Direction.FORWARD);
         LeftRear.setDirection(DcMotor.Direction.REVERSE);
         RightFront.setDirection(DcMotor.Direction.REVERSE);
