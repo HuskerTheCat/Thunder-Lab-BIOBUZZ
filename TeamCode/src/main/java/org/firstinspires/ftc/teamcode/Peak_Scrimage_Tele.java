@@ -34,11 +34,11 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     final double FlowerIntakeUpPos = 0.35;
     final double FlowerIntakeDownPos = 1;
     final double LaunchServoRangeDeg = 270;
-    final double LaunchServoUpPos = 0.05;
+    final double LaunchServoUpPos = 0.00;
     final double LaunchServoDownPos = 0.22;
     final double FlowerInitStep = 0.005; //servo position change per loop when adjusting during init
     final double TurretPower = 0.4;
-    final double IntakePower = 0.8;
+    final double IntakePower = 0.5;
 
     //drive speeds, picked with the triggers so the bumpers are free for the turret
     final double SlowThrottle = 0.4;
@@ -46,6 +46,10 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     final double FastThrottle = 1.0;
     double throttle = NormalThrottle;
 
+    boolean lastFlywheelSpeedButton = false;
+    boolean flywheelSpeedHigh = false;
+    int FLYWHEEL_HIGH = 3500;
+    int FLYWHEEL_LOW = 2450;
     boolean flywheelOn = false;
     boolean lastFlywheelButton = false;
 
@@ -55,7 +59,7 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
 
     double LOAD_TIME = 0.8;   // sec arm sits down while feeders load a ball
     double UP_TIME   = 0.2;   // sec arm sits up (lift + launch)
-    double FLYWHEEL_TARGET = 500; //encoder ticks per second, used by both the dpad toggle and the launch sequence
+    double FLYWHEEL_TARGET = FLYWHEEL_LOW; //encoder ticks per second, used by both the dpad toggle and the launch sequence
     double FLYWHEEL_TOLERANCE = 20; //measured velocity wobbles, too tight and the arm never lifts
     boolean controller1IsNormal = false;
     boolean controller2IsNormal = true;
@@ -67,23 +71,24 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             //telemetry.addLine("LaunchServo pos: " + LaunchServo.getPosition());
             //telemetry.addLine("FlowerServo pos: " + FlowerIntake.getPosition());
             //telemetry.addLine("turret pos: " + Turret.getCurrentPosition());
-            /*
+
             while (opModeInInit()) {
 
                 telemetry.addLine("Controller Profiles");
-                telemetry.addLine("Driver: " + (controller1IsNormal?"<MILES Centric> ":"<NORMAL Centric> "));
+                telemetry.addLine("Driver: " + (controller1IsNormal?"<NORMAL Centric> ":"<MILES Centric> "));
                 if(gamepad1.dpad_left)controller1IsNormal=false;
                 if(gamepad1.dpad_right)controller1IsNormal=true;
-                telemetry.addLine("Co-Driver: " + (controller2IsNormal?"<MILES Centric> ":"<NORMAL Centric> "));
-                if(gamepad1.dpad_left)controller2IsNormal=false;
-                if(gamepad1.dpad_right)controller2IsNormal=true;
+                telemetry.addLine("Co-Driver: " + (controller2IsNormal?"<NORMAL Centric> ":"<MILES Centric> "));
+                if(gamepad2.dpad_left)controller2IsNormal=false;
+                if(gamepad2.dpad_right)controller2IsNormal=true;
 
 
 
 
             telemetry.update();
             }
-*/
+
+/*
         double launchInitPos = LaunchServoDownPos;
         LaunchServo.setPosition(launchInitPos);
 
@@ -99,6 +104,8 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             telemetry.addLine("turret pos: " + Turret.getCurrentPosition());
             telemetry.update();
         }
+
+ */
         waitForStart();
         while(opModeIsActive()){
             if (gamepad1.right_trigger>0.5||gamepad2.right_trigger>0.5){
@@ -109,6 +116,9 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                 throttle = NormalThrottle;
             }
 
+        if(gamepad2.dpad_up){
+            //  gamepad2.
+        }
 
             float deadZone = 0.05f;
             //use the joysticks on either controller to move the robot, with priority going to gamepad 1
@@ -121,15 +131,9 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                     -((Math.abs(gamepad1.right_stick_x)>deadZone?gamepad1:gamepad2).right_stick_x)*throttle);//rotation
             */
             RobotCentricDrive(
-                    -(
-                            (
-                                    Math.abs(
-                                            gamepad1.left_stick_y
-                                    )>deadZone?gamepad1:gamepad2
-                            ).left_stick_y
-                    ) * throttle, //forward/backward, stick y is negative when pushed up
-                    ((Math.abs(gamepad1.left_stick_x)>deadZone?gamepad1:gamepad2).left_stick_x)*throttle ,//strafe
-                    ((Math.abs(gamepad1.right_stick_x)>deadZone?gamepad1:gamepad2).right_stick_x)*throttle);//rotation
+                    -(((Math.abs(gamepad1.left_stick_y)>deadZone?gamepad1:gamepad2).left_stick_y) * throttle), //forward/backward, stick y is negative when pushed up
+                    (-(((Math.abs(gamepad1.right_stick_x)>deadZone?gamepad1:gamepad2).right_stick_x)*throttle)),//strafe
+                    (-((Math.abs(gamepad1.left_stick_x)>deadZone?gamepad1:gamepad2).left_stick_x)*throttle));//rotation
             //basic turret rotation with priority on controller 2
             //if both are pressed just stops, eventualy will go with whichever bumper was pressed most recently
             if(gamepad2.right_bumper&&!gamepad2.left_bumper){
@@ -147,8 +151,8 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             //intake/outake, priority on controller
             if(gamepad1.cross||gamepad2.cross){
                 Intake.setPower(IntakePower);
-                FeedBottom.setPower(1);
-                FeedTop.setPower(1);
+                FeedBottom.setPower(0.8);
+                FeedTop.setPower(0.8);
             } else if(gamepad2.circle||gamepad1.circle){
                 Intake.setPower(-IntakePower);
             } else {
@@ -161,9 +165,32 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             boolean flywheelButton = gamepad1.dpad_left||gamepad2.dpad_left;
             if(flywheelButton&&!lastFlywheelButton) {
                 flywheelOn = !flywheelOn;
-                Flywheel.setVelocity(flywheelOn?FLYWHEEL_TARGET:0);
+                Flywheel.setPower(flywheelOn?1:0);
             }
             lastFlywheelButton = flywheelButton;
+
+            boolean flywheelSpeedButton = gamepad1.dpad_right||gamepad2.dpad_right;
+            if(flywheelSpeedButton&&!lastFlywheelSpeedButton){
+                if(flywheelSpeedHigh){
+                    Flywheel.setVelocity(FLYWHEEL_LOW);
+                    FLYWHEEL_TARGET = FLYWHEEL_LOW;
+                }else{
+                    Flywheel.setVelocity(FLYWHEEL_HIGH);
+                    FLYWHEEL_TARGET = FLYWHEEL_HIGH;
+                }
+                flywheelSpeedHigh = !flywheelSpeedHigh;
+
+            }
+            lastFlywheelSpeedButton = flywheelSpeedButton;
+
+
+            //toggles flywheel between 0 and full speed, only on a new press so holding it doesn't flicker
+            flywheelButton = gamepad1.dpad_left||gamepad2.dpad_left;
+            if(flywheelButton&&!lastFlywheelButton) {
+                flywheelOn = !flywheelOn;
+            }
+            lastFlywheelButton = flywheelButton;
+            Flywheel.setVelocity(flywheelOn?FLYWHEEL_TARGET:0);
 
             if(gamepad1.dpad_down||gamepad2.dpad_down){
                 FlowerIntake.setPosition(FlowerIntakeDownPos);
@@ -191,35 +218,36 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             }
 */
             if (gamepad1.square || gamepad2.square) {
+                if(((!armUp)&&(launchTimer.seconds()>(LOAD_TIME*1/3)))||(armUp&&(launchTimer.seconds()<(UP_TIME*2/3)))){
+                    FeedTop.setPower(0.8);
+                    FeedBottom.setPower(0.8);
+                }else{
+                    FeedTop.setPower(0);
+                    FeedBottom.setPower(0);
+                }
 
                 Flywheel.setVelocity(FLYWHEEL_TARGET);
                 if(
                         Math.abs(Flywheel.getVelocity() - FLYWHEEL_TARGET) < FLYWHEEL_TOLERANCE)
                 //true)
                 {
-                if (!armUp) {
-                    // ARM DOWN: load a ball
-                    LaunchServo.setPosition(LaunchServoDownPos);
+                    if (!armUp) {
+                        // ARM DOWN: load a ball
+                        LaunchServo.setPosition(LaunchServoDownPos);
+                        // only lift once the ball has had time to load AND flywheel is up to speed   flywheelReady
+                        if (launchTimer.seconds() >= LOAD_TIME) {
+                            armUp = true;
+                            launchTimer.reset();
+                        }
+                    } else {
+                        // ARM UP: feeders off, push ball into flywheel
+                        LaunchServo.setPosition(LaunchServoUpPos);
 
-                    FeedTop.setPower(0.8);
-                    FeedBottom.setPower(0.8);
-
-                    // only lift once the ball has had time to load AND flywheel is up to speed   flywheelReady
-                    if (launchTimer.seconds() >= LOAD_TIME) {
-                        armUp = true;
-                        launchTimer.reset();
+                        if (launchTimer.seconds() >= UP_TIME) {
+                            armUp = false;
+                            launchTimer.reset();
+                        }
                     }
-                } else {
-                    // ARM UP: feeders off, push ball into flywheel
-                    LaunchServo.setPosition(LaunchServoUpPos);
-                    FeedTop.setPower(0);
-                    FeedBottom.setPower(0);
-
-                    if (launchTimer.seconds() >= UP_TIME) {
-                        armUp = false;
-                        launchTimer.reset();
-                    }
-                }
                 }
 
             } else {
@@ -231,10 +259,12 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                 armUp = false;
                 launchTimer.reset();
             }
-            telemetry.addData("Throttle", throttle);
+            //telemetry.addData("Throttle", throttle);
             telemetry.addData("Flywheel", flywheelOn?"On":"Off");
             telemetry.addData("Flywheel Velocity", Flywheel.getVelocity());
-            telemetry.addData("Turret Position", Turret.getCurrentPosition());
+            //telemetry.addData("Turret Position", Turret.getCurrentPosition());
+            telemetry.addData("Flywheel Target", FLYWHEEL_TARGET);
+            telemetry.addData("Flywheel ERROR", Flywheel.getVelocity()-FLYWHEEL_TARGET);
             telemetry.update();
         }
     }
