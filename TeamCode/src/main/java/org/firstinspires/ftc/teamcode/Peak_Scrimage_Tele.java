@@ -147,10 +147,14 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             //intake/outake, priority on controller
             if(gamepad1.cross||gamepad2.cross){
                 Intake.setPower(IntakePower);
+                FeedBottom.setPower(1);
+                FeedTop.setPower(1);
             } else if(gamepad2.circle||gamepad1.circle){
                 Intake.setPower(-IntakePower);
             } else {
                 Intake.setPower(0);
+                FeedBottom.setPower(0);
+                FeedTop.setPower(0);
             }
 
             //toggles flywheel between 0 and full speed, only on a new press so holding it doesn't flicker
