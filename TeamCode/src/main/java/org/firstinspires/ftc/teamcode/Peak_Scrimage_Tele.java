@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
@@ -48,8 +49,10 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
 
     boolean lastFlywheelSpeedButton = false;
     boolean flywheelSpeedHigh = false;
-    int FLYWHEEL_HIGH = 3500;
-    int FLYWHEEL_LOW = 2450;
+    //int FLYWHEEL_HIGH = 3500;
+    //int FLYWHEEL_LOW = 2450;
+    int FLYWHEEL_HIGH = 2000;
+    int FLYWHEEL_LOW = 1800;
     boolean flywheelOn = false;
     boolean lastFlywheelButton = false;
 
@@ -57,10 +60,10 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     ElapsedTime launchTimer = new ElapsedTime();
     boolean armUp = false;
 
-    double LOAD_TIME = 0.8;   // sec arm sits down while feeders load a ball
+    double LOAD_TIME = 1.4;   // sec arm sits down while feeders load a ball
     double UP_TIME   = 0.2;   // sec arm sits up (lift + launch)
     double FLYWHEEL_TARGET = FLYWHEEL_LOW; //encoder ticks per second, used by both the dpad toggle and the launch sequence
-    double FLYWHEEL_TOLERANCE = 20; //measured velocity wobbles, too tight and the arm never lifts
+    double FLYWHEEL_TOLERANCE = 60; //measured velocity wobbles, too tight and the arm never lifts
     boolean controller1IsNormal = false;
     boolean controller2IsNormal = true;
     @Override
@@ -148,123 +151,77 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                 Turret.setPower(0);
             }
 
-            //intake/outake, priority on controller
-            if(gamepad1.cross||gamepad2.cross){
-                Intake.setPower(IntakePower);
-                FeedBottom.setPower(0.8);
-                FeedTop.setPower(0.8);
-            } else if(gamepad2.circle||gamepad1.circle){
-                Intake.setPower(-IntakePower);
-            } else {
-                Intake.setPower(0);
-                FeedBottom.setPower(0);
-                FeedTop.setPower(0);
+            // ---- decide intake/feeder power (applied once at the bottom) ----
+            double intakePower = 0;
+            double feedPower = 0;
+            if (gamepad1.cross || gamepad2.cross) {
+                intakePower = IntakePower;
+                feedPower = 0.8;
+            } else if (gamepad1.circle || gamepad2.circle) {
+                intakePower = -IntakePower;
             }
 
-            //toggles flywheel between 0 and full speed, only on a new press so holding it doesn't flicker
-            boolean flywheelButton = gamepad1.dpad_left||gamepad2.dpad_left;
-            if(flywheelButton&&!lastFlywheelButton) {
-                flywheelOn = !flywheelOn;
-                Flywheel.setPower(flywheelOn?1:0);
-            }
+// ---- flywheel on/off toggle ----
+            boolean flywheelButton = gamepad1.dpad_left || gamepad2.dpad_left;
+            if (flywheelButton && !lastFlywheelButton) flywheelOn = !flywheelOn;
             lastFlywheelButton = flywheelButton;
 
-            boolean flywheelSpeedButton = gamepad1.dpad_right||gamepad2.dpad_right;
-            if(flywheelSpeedButton&&!lastFlywheelSpeedButton){
-                if(flywheelSpeedHigh){
-                    Flywheel.setVelocity(FLYWHEEL_LOW);
-                    FLYWHEEL_TARGET = FLYWHEEL_LOW;
-                }else{
-                    Flywheel.setVelocity(FLYWHEEL_HIGH);
-                    FLYWHEEL_TARGET = FLYWHEEL_HIGH;
-                }
+// ---- flywheel high/low toggle ----
+            boolean flywheelSpeedButton = gamepad1.dpad_right || gamepad2.dpad_right;
+            if (flywheelSpeedButton && !lastFlywheelSpeedButton) {
                 flywheelSpeedHigh = !flywheelSpeedHigh;
-
+                FLYWHEEL_TARGET = flywheelSpeedHigh ? FLYWHEEL_HIGH : FLYWHEEL_LOW;
             }
             lastFlywheelSpeedButton = flywheelSpeedButton;
 
-
-            //toggles flywheel between 0 and full speed, only on a new press so holding it doesn't flicker
-            flywheelButton = gamepad1.dpad_left||gamepad2.dpad_left;
-            if(flywheelButton&&!lastFlywheelButton) {
-                flywheelOn = !flywheelOn;
-            }
-            lastFlywheelButton = flywheelButton;
-            Flywheel.setVelocity(flywheelOn?FLYWHEEL_TARGET:0);
-
-            if(gamepad1.dpad_down||gamepad2.dpad_down){
+// ---- flower ----
+            if (gamepad1.dpad_down || gamepad2.dpad_down) {
                 FlowerIntake.setPosition(FlowerIntakeDownPos);
-            }else if (gamepad1.dpad_up||gamepad2.dpad_up){
+            } else if (gamepad1.dpad_up || gamepad2.dpad_up) {
                 FlowerIntake.setPosition(FlowerIntakeUpPos);
             }
-/*
-            //launch sequence
-            if(gamepad1.square||gamepad2.square){
 
-                Flywheel.setVelocity(500);
-                if (Flywheel.getVelocity() > 480){
-                    if(LaunchServo.getPosition()>=LaunchServoUpPos-3){
-                        LaunchServo.setPosition(LaunchServoDownPos);
-                    }else if(LaunchServo.getPosition() <= LaunchServoDownPos+3){
-                        LaunchServo.setPosition(LaunchServoUpPos);
-                        FeedTop.setPower(0.8);
-                        FeedBottom.setPower(0.8);
+// ---- launch sequence ----
+            boolean launching = gamepad1.square || gamepad2.square;
+            double launchPos = LaunchServoDownPos;
+
+            if (launching) {
+                if (!armUp) {
+                    launchPos = LaunchServoDownPos;
+                    feedPower = launchTimer.seconds() > LOAD_TIME / 3 ? 0.8 : 0;
+                    boolean ready = Math.abs(Flywheel.getVelocity() - FLYWHEEL_TARGET) < FLYWHEEL_TOLERANCE;
+                    // flywheel only gates the lift, so a velocity dip can't freeze the arm up
+                    if (launchTimer.seconds() >= LOAD_TIME && ready) {
+                        armUp = true;
+                        launchTimer.reset();
                     }
-                    if(LaunchServo.getPosition()>= (LaunchServoUpPos/2)){
-                        FeedTop.setPower(0);
-                        FeedBottom.setPower(0);
-                    }
-                }
-            }
-*/
-            if (gamepad1.square || gamepad2.square) {
-                if(((!armUp)&&(launchTimer.seconds()>(LOAD_TIME*1/3)))||(armUp&&(launchTimer.seconds()<(UP_TIME*2/3)))){
-                    FeedTop.setPower(0.8);
-                    FeedBottom.setPower(0.8);
-                }else{
-                    FeedTop.setPower(0);
-                    FeedBottom.setPower(0);
-                }
-
-                Flywheel.setVelocity(FLYWHEEL_TARGET);
-                if(
-                        Math.abs(Flywheel.getVelocity() - FLYWHEEL_TARGET) < FLYWHEEL_TOLERANCE)
-                //true)
-                {
-                    if (!armUp) {
-                        // ARM DOWN: load a ball
-                        LaunchServo.setPosition(LaunchServoDownPos);
-                        // only lift once the ball has had time to load AND flywheel is up to speed   flywheelReady
-                        if (launchTimer.seconds() >= LOAD_TIME) {
-                            armUp = true;
-                            launchTimer.reset();
-                        }
-                    } else {
-                        // ARM UP: feeders off, push ball into flywheel
-                        LaunchServo.setPosition(LaunchServoUpPos);
-
-                        if (launchTimer.seconds() >= UP_TIME) {
-                            armUp = false;
-                            launchTimer.reset();
-                        }
+                } else {
+                    launchPos = LaunchServoUpPos;
+                    feedPower = launchTimer.seconds() < UP_TIME * 2 / 3 ? 0.8 : 0;
+                    if (launchTimer.seconds() >= UP_TIME) {
+                        armUp = false;
+                        launchTimer.reset();
                     }
                 }
-
             } else {
-                // button released: reset everything, flywheel goes back to whatever the dpad toggle says
-                Flywheel.setVelocity(flywheelOn?FLYWHEEL_TARGET:0);
-                LaunchServo.setPosition(LaunchServoDownPos);
-                FeedTop.setPower(0);
-                FeedBottom.setPower(0);
                 armUp = false;
                 launchTimer.reset();
             }
+
+// ---- apply every output exactly once per loop ----
+            Flywheel.setVelocity((flywheelOn || launching) ? FLYWHEEL_TARGET : 0);
+            LaunchServo.setPosition(launchPos);
+            FeedTop.setPower(feedPower);
+            FeedBottom.setPower(feedPower);
+            Intake.setPower(intakePower);
             //telemetry.addData("Throttle", throttle);
             telemetry.addData("Flywheel", flywheelOn?"On":"Off");
             telemetry.addData("Flywheel Velocity", Flywheel.getVelocity());
             //telemetry.addData("Turret Position", Turret.getCurrentPosition());
             telemetry.addData("Flywheel Target", FLYWHEEL_TARGET);
             telemetry.addData("Flywheel ERROR", Flywheel.getVelocity()-FLYWHEEL_TARGET);
+            //telemerty.addData();
+            telemetry.addData("Flywheel power", Flywheel.getPower());
             telemetry.update();
         }
     }
@@ -345,6 +302,9 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         // Motor encoders, setVelocity needs RUN_USING_ENCODER
         //Turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         Flywheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        //double F = 32767.0 / 2860.0;  // about 11.46
+        //Flywheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
+        //        new PIDFCoefficients(1.0, 0.0, 0.0, F));
     }
     void InitalizeIMU(){
         imu = hardwareMap.get(IMU.class, "imu");
