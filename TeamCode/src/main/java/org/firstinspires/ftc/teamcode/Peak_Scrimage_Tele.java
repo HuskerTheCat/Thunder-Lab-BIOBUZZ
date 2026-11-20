@@ -51,8 +51,16 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
     boolean flywheelSpeedHigh = false;
     //int FLYWHEEL_HIGH = 3500;
     //int FLYWHEEL_LOW = 2450;
-    int FLYWHEEL_HIGH = 2000;
+    //high runs the flywheel at full power (the old 3500 target was really just full power, the motor can't go that fast).
+    //FLYWHEEL_HIGH is only the speed it has to be above before the arm will launch on high.
+    //lower it if the arm never lifts on high with a weak battery, retune after the heavier flywheel goes on
+    int FLYWHEEL_HIGH = 2350;
+    //low uses velocity control, makes shots well at 1800
     int FLYWHEEL_LOW = 1800;
+    boolean flywheelFullPower = false; //tracks which run mode the flywheel is in so it only switches when needed
+    //real top speed with the flywheel loaded on a normal battery (2860 was free spinning on a full battery,
+    //which made F too weak and left the flywheel about 200 under target)
+    final double FLYWHEEL_MAX_TPS = 2550;
     boolean flywheelOn = false;
     boolean lastFlywheelButton = false;
 
@@ -137,27 +145,29 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                     -(((Math.abs(gamepad1.left_stick_y)>deadZone?gamepad1:gamepad2).left_stick_y) * throttle), //forward/backward, stick y is negative when pushed up
                     (-(((Math.abs(gamepad1.right_stick_x)>deadZone?gamepad1:gamepad2).right_stick_x)*throttle)),//strafe
                     (-((Math.abs(gamepad1.left_stick_x)>deadZone?gamepad1:gamepad2).left_stick_x)*throttle));//rotation
-            //basic turret rotation with priority on controller 2
-            //if both are pressed just stops, eventualy will go with whichever bumper was pressed most recently
-            if(gamepad2.right_bumper&&!gamepad2.left_bumper){
+            //basic turret rotation with priority on controller 2, circle one way and cross the other
+            //(moved off the bumpers so they're free for intake)
+            //if both are pressed just stops, eventualy will go with whichever button was pressed most recently
+            if(gamepad2.circle&&!gamepad2.cross){
                 Turret.setPower(TurretPower);
-            } else if (gamepad2.left_bumper&&!gamepad2.right_bumper) {
+            } else if (gamepad2.cross&&!gamepad2.circle) {
                 Turret.setPower(-TurretPower);
-            } else if (gamepad1.right_bumper&&!gamepad1.left_bumper) {
+            } else if (gamepad1.circle&&!gamepad1.cross) {
                 Turret.setPower(TurretPower);
-            } else if (gamepad1.left_bumper&&!gamepad1.right_bumper) {
+            } else if (gamepad1.cross&&!gamepad1.circle) {
                 Turret.setPower(-TurretPower);
             } else {
                 Turret.setPower(0);
             }
 
             // ---- decide intake/feeder power (applied once at the bottom) ----
+            // right bumper = intake in, left bumper = outtake
             double intakePower = 0;
             double feedPower = 0;
-            if (gamepad1.cross || gamepad2.cross) {
+            if (gamepad1.right_bumper || gamepad2.right_bumper) {
                 intakePower = IntakePower;
                 feedPower = 0.8;
-            } else if (gamepad1.circle || gamepad2.circle) {
+            } else if (gamepad1.left_bumper || gamepad2.left_bumper) {
                 intakePower = -IntakePower;
             }
 
@@ -189,7 +199,10 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
                 if (!armUp) {
                     launchPos = LaunchServoDownPos;
                     feedPower = launchTimer.seconds() > LOAD_TIME / 3 ? 0.8 : 0;
-                    boolean ready = Math.abs(Flywheel.getVelocity() - FLYWHEEL_TARGET) < FLYWHEEL_TOLERANCE;
+                    // full power on high has no exact target, so it's ready once it's fast enough
+                    boolean ready = flywheelSpeedHigh
+                            ? Flywheel.getVelocity() >= FLYWHEEL_HIGH
+                            : Math.abs(Flywheel.getVelocity() - FLYWHEEL_TARGET) < FLYWHEEL_TOLERANCE;
                     // flywheel only gates the lift, so a velocity dip can't freeze the arm up
                     if (launchTimer.seconds() >= LOAD_TIME && ready) {
                         armUp = true;
@@ -209,13 +222,29 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
             }
 
 // ---- apply every output exactly once per loop ----
-            Flywheel.setVelocity((flywheelOn || launching) ? FLYWHEEL_TARGET : 0);
+            boolean flywheelRunning = flywheelOn || launching;
+            if (flywheelRunning && flywheelSpeedHigh) {
+                // high: straight full power, no velocity PID to wind up against a speed it can't reach
+                if (!flywheelFullPower) {
+                    Flywheel.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+                    flywheelFullPower = true;
+                }
+                Flywheel.setPower(1.0);
+            } else {
+                // low and off: velocity control
+                if (flywheelFullPower) {
+                    Flywheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+                    SetFlywheelPIDF();
+                    flywheelFullPower = false;
+                }
+                Flywheel.setVelocity(flywheelRunning ? FLYWHEEL_TARGET : 0);
+            }
             LaunchServo.setPosition(launchPos);
             FeedTop.setPower(feedPower);
             FeedBottom.setPower(feedPower);
             Intake.setPower(intakePower);
             //telemetry.addData("Throttle", throttle);
-            telemetry.addData("Flywheel", flywheelOn?"On":"Off");
+            telemetry.addData("Flywheel", (flywheelOn?"On":"Off") + (flywheelSpeedHigh?" HIGH (full power)":" LOW"));
             telemetry.addData("Flywheel Velocity", Flywheel.getVelocity());
             //telemetry.addData("Turret Position", Turret.getCurrentPosition());
             telemetry.addData("Flywheel Target", FLYWHEEL_TARGET);
@@ -302,9 +331,19 @@ public class Peak_Scrimage_Tele extends LinearOpMode{
         // Motor encoders, setVelocity needs RUN_USING_ENCODER
         //Turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         Flywheel.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        //double F = 32767.0 / 2860.0;  // about 11.46
-        //Flywheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
-        //        new PIDFCoefficients(1.0, 0.0, 0.0, F));
+        SetFlywheelPIDF();
+    }
+    private void SetFlywheelPIDF() {
+        // The hub's default velocity PID has no feedforward (F), so it levels off below target
+        // with power stuck under 1. F gives the power the target needs up front, P and I clean up the rest.
+        // F = 32767 / max ticks per second at full power (measured with Flywheel Max Test).
+        // P and I are much stronger than the textbook 0.1*F / 0.1*P, which only crept up to target over 30-40 sec.
+        // P = 10 is the hub's own default (already ran stable on this flywheel), I pulls out the last bit in a few sec.
+        double F = 32767.0 / FLYWHEEL_MAX_TPS;
+        double P = 10.0;
+        double I = 1.0;
+        Flywheel.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER,
+                new PIDFCoefficients(P, I, 0.0, F));
     }
     void InitalizeIMU(){
         imu = hardwareMap.get(IMU.class, "imu");
