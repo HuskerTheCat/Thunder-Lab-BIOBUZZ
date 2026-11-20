@@ -12,7 +12,10 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
 /*
- * Starts facing the goal, launches the preloaded pollen at low flywheel speed, then drives forward and right.
+ * Starts at C1 facing the goal (up the field), launches the preloaded pollen at low flywheel speed, then drives:
+ *   C1 -> diagonal up-left to about A/B2 -> straight up to about A/B3 -> up to the park box at A5
+ * The robot keeps facing up the whole time, mecanum just slides diagonally.
+ * The field is rotated (not mirrored) between alliances, so the same path works for red and blue.
  *
  * Configure during INIT with the dpad (either gamepad):
  *   dpad up/down    = pick a setting
@@ -20,9 +23,8 @@ import com.qualcomm.robotcore.util.Range;
  *
  * Settings:
  *   Start delay   - extra seconds of launching (it doesn't move before launching, so the delay is spent shooting)
- *   Path          - forward then right, or forward only
- *   Forward       - short or long forward move
- *   Start spot    - center, or side (about a foot left and turned toward the goal so robots in front aren't in the way)
+ *   End           - park at A5, or stop at A3 so it stays out of a partner's way
+ *   Start spot    - center of C1, or side (about a foot left and turned toward the goal)
  *
  * All distances, angles and times are placeholders to tune on the field.
  */
@@ -58,26 +60,28 @@ public class Peak_Launch_Auto extends LinearOpMode {
     final double DRIVE_RESERVE_SEC = 8;
     final int MAX_START_DELAY_SEC = 10;
 
+    /* ================= PATH (inches, placeholders from the field drawing, 1 tile = 24 in) ================= */
+    // leg 1: C1 start diagonally up-left to about A/B2
+    final double LEG1_LEFT_IN = 39;
+    final double LEG1_FORWARD_IN = 31;
+    // leg 2: straight up to about A/B3
+    final double LEG2_FORWARD_IN = 16;
+    // leg 3: up and a little left to the park box at A5
+    final double LEG3_LEFT_IN = 7.5;
+    final double LEG3_FORWARD_IN = 52;
+    // side start: how far left of the center spot it starts, and how far it's turned toward the goal (clockwise)
+    final double SIDE_START_OFFSET_IN = 12;
+    final double SIDE_START_ANGLE_DEG = 15;
+
     /* ================= DRIVING (placeholders, tune on the field) ================= */
     final double TICKS_PER_INCH = 41.8;          // forward/back
     final double STRAFE_TICKS_PER_INCH = 46.0;   // mecanum strafing slips, so it takes more ticks per inch
     final double TICKS_PER_DEGREE = 8.0;         // turning in place
     final double DRIVE_POWER = 0.5;
-    final double SHORT_FORWARD_IN = 12;
-    final double LONG_FORWARD_IN = 24;
-    final double RIGHT_IN = 24;
-    // side start: how far left of the center spot it starts, and how far it's turned toward the goal (clockwise)
-    final double SIDE_START_OFFSET_IN = 12;
-    final double SIDE_START_ANGLE_DEG = 15;
-    // the tele negates strafe and rotation to get the right physical direction, the auto matches it.
-    // if the robot strafes or turns the wrong way, flip these to 1
-    final int STRAFE_SIGN = -1;
-    final int TURN_SIGN = -1;
 
     /* ================= CONFIG (set during init) ================= */
     int startDelaySec = 0;
-    boolean forwardOnly = false;
-    boolean longForward = false;
+    boolean stopAtA3 = false;
     boolean sideStart = false;
 
     ElapsedTime autoTimer = new ElapsedTime();
@@ -99,13 +103,14 @@ public class Peak_Launch_Auto extends LinearOpMode {
 
         // ---- drive ----
         if (sideStart) {
-            // turn back from facing the goal to straight before driving
-            Drive(0, 0, -SIDE_START_ANGLE_DEG, 6, "Turn back to straight");
+            // turn back from facing the goal to straight up the field before driving
+            Drive(0, 0, -SIDE_START_ANGLE_DEG, 3, "Turn back to straight");
         }
-        Drive(longForward ? LONG_FORWARD_IN : SHORT_FORWARD_IN, 0, 0, 4, "Forward");
-        if (!forwardOnly) {
-            // starting a foot left means a foot further to go right
-            Drive(0, RIGHT_IN + (sideStart ? SIDE_START_OFFSET_IN : 0), 0, 5, "Right");
+        // starting a foot left means a foot less to go left on the first leg
+        Drive(LEG1_FORWARD_IN, -(LEG1_LEFT_IN - (sideStart ? SIDE_START_OFFSET_IN : 0)), 0, 5, "Leg 1: up-left to A2");
+        Drive(LEG2_FORWARD_IN, 0, 0, 3, "Leg 2: up to A3");
+        if (!stopAtA3) {
+            Drive(LEG3_FORWARD_IN, -LEG3_LEFT_IN, 0, 5, "Leg 3: up to park at A5");
         }
 
         StopEverything();
@@ -117,7 +122,7 @@ public class Peak_Launch_Auto extends LinearOpMode {
     }
 
     private void ConfigureDuringInit() {
-        final String[] names = {"Start delay", "Path", "Forward", "Start spot"};
+        final String[] names = {"Start delay", "End", "Start spot"};
         int selected = 0;
         boolean lastUp = false, lastDown = false, lastLeft = false, lastRight = false;
 
@@ -134,9 +139,8 @@ public class Peak_Launch_Auto extends LinearOpMode {
             if (change != 0) {
                 switch (selected) {
                     case 0: startDelaySec = Range.clip(startDelaySec + change, 0, MAX_START_DELAY_SEC); break;
-                    case 1: forwardOnly = !forwardOnly; break;
-                    case 2: longForward = !longForward; break;
-                    case 3: sideStart = !sideStart; break;
+                    case 1: stopAtA3 = !stopAtA3; break;
+                    case 2: sideStart = !sideStart; break;
                 }
             }
             lastUp = up; lastDown = down; lastLeft = left; lastRight = right;
@@ -144,9 +148,8 @@ public class Peak_Launch_Auto extends LinearOpMode {
             String[] values = {
                     startDelaySec + " sec (launches for " + (int) Math.min(BASE_LAUNCH_SEC + startDelaySec,
                             AUTO_LENGTH_SEC - DRIVE_RESERVE_SEC) + " sec)",
-                    forwardOnly ? "Forward only" : "Forward then right",
-                    longForward ? "Long" : "Short",
-                    sideStart ? "Side (1 ft left, turned to goal)" : "Center"
+                    stopAtA3 ? "Stop at A3" : "Park at A5",
+                    sideStart ? "Side (1 ft left, turned to goal)" : "Center of C1"
             };
             telemetry.addLine("Dpad up/down = pick, left/right = change");
             for (int i = 0; i < names.length; i++) {
@@ -203,38 +206,64 @@ public class Peak_Launch_Auto extends LinearOpMode {
     }
 
     /**
-     * Drives a set distance with encoders. Positive forward = forward, positive right = right,
+     * Drives a set distance. Positive forward = forward, positive right = right,
      * positive clockwise = turn clockwise (all as the robot sees it).
+     *
+     * Wheels are driven with plain power like the tele (see InitializeHardware for the swapped front motor names),
+     * and the encoders only measure how far it's gone. It doesn't use RUN_TO_POSITION: on a motor whose
+     * encoder counts backwards from its power, RUN_TO_POSITION "corrects" the wrong way and runs away,
+     * which spins the robot. Measuring distance with absolute values doesn't care which way an encoder counts.
      */
     private void Drive(double forwardIn, double rightIn, double clockwiseDeg, double timeoutSec, String label) {
         if (!opModeIsActive()) return;
-        int f = (int) Math.round(forwardIn * TICKS_PER_INCH);
-        int r = (int) Math.round(rightIn * STRAFE_TICKS_PER_INCH) * STRAFE_SIGN;
-        int c = (int) Math.round(clockwiseDeg * TICKS_PER_DEGREE) * TURN_SIGN;
+        double f = forwardIn * TICKS_PER_INCH;
+        double r = rightIn * STRAFE_TICKS_PER_INCH;
+        double c = clockwiseDeg * TICKS_PER_DEGREE;
 
-        // same mecanum mix as the tele's MecanumDrive
-        LeftFront.setTargetPosition(LeftFront.getCurrentPosition() + f + r + c);
-        LeftRear.setTargetPosition(LeftRear.getCurrentPosition() + (f - r) + c);
-        RightFront.setTargetPosition(RightFront.getCurrentPosition() + (f - r) - c);
-        RightRear.setTargetPosition(RightRear.getCurrentPosition() + (f + r) - c);
+        // standard mecanum mix by PHYSICAL wheel position, in ticks each wheel needs to travel
+        DcMotor[] wheels = {LeftFront, LeftRear, RightFront, RightRear};
+        double[] wheelTicks = {f + r + c, (f - r) + c, (f - r) - c, (f + r) - c};
 
-        for (DcMotor m : new DcMotor[]{LeftFront, LeftRear, RightFront, RightRear}) {
-            m.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            m.setPower(DRIVE_POWER);
+        double totalTicks = 0;
+        double biggest = 0;
+        for (double t : wheelTicks) {
+            totalTicks += Math.abs(t);
+            biggest = Math.max(biggest, Math.abs(t));
         }
+        if (totalTicks < 1) return;
 
-        // wait for every wheel, with a timeout so a stuck wheel can't burn the rest of auto
+        int[] start = new int[4];
+        for (int i = 0; i < 4; i++) start[i] = wheels[i].getCurrentPosition();
+
         ElapsedTime moveTimer = new ElapsedTime();
-        while (opModeIsActive() && moveTimer.seconds() < timeoutSec
-                && (LeftFront.isBusy() || LeftRear.isBusy() || RightFront.isBusy() || RightRear.isBusy())) {
+        double progress = 0;
+        while (opModeIsActive() && moveTimer.seconds() < timeoutSec && progress < 1) {
+            // progress = how much total wheel travel is done out of what's needed
+            double traveled = 0;
+            int[] moved = new int[4];
+            for (int i = 0; i < 4; i++) {
+                moved[i] = wheels[i].getCurrentPosition() - start[i];
+                traveled += Math.abs(moved[i]);
+            }
+            progress = traveled / totalTicks;
+
+            // slow down over the last part so it doesn't coast past the target
+            double power = DRIVE_POWER * Range.clip((1 - progress) * 3, 0.3, 1);
+            for (int i = 0; i < 4; i++) {
+                // each wheel's power is proportional to how far it has to go, so diagonals stay straight
+                wheels[i].setPower(power * wheelTicks[i] / biggest);
+            }
+
             telemetry.addData("Phase", label);
+            telemetry.addData("Progress", "%.0f%%", progress * 100);
+            // if one wheel's number stays near 0 or runs way ahead of the others, that wheel or its encoder cable is the problem
+            telemetry.addData("Encoders LF/LR/RF/RR", "%d / %d / %d / %d", moved[0], moved[1], moved[2], moved[3]);
             telemetry.addData("Time", "%.1f", autoTimer.seconds());
             telemetry.update();
         }
 
-        for (DcMotor m : new DcMotor[]{LeftFront, LeftRear, RightFront, RightRear}) {
-            m.setPower(0);
-        }
+        for (DcMotor m : wheels) m.setPower(0);
+        sleep(150); // let it settle before the next move
     }
 
     private void StopEverything() {
@@ -247,25 +276,31 @@ public class Peak_Launch_Auto extends LinearOpMode {
     }
 
     private void InitializeHardware() {
-        LeftFront = hardwareMap.get(DcMotor.class, "LeftFront");
+        // The robot configuration has the two FRONT motor names swapped: the motor named "RightFront"
+        // (port 0) is physically the left front wheel, and "LeftFront" (port 1) is the right front.
+        // The tele works around this with its stick swaps and negations. Here each variable is the
+        // wheel's real physical position, so the drive math above is the normal mecanum mix.
+        LeftFront = hardwareMap.get(DcMotor.class, "RightFront");
+        RightFront = hardwareMap.get(DcMotor.class, "LeftFront");
         LeftRear = hardwareMap.get(DcMotor.class, "LeftRear");
         RightRear = hardwareMap.get(DcMotor.class, "RightRear");
-        RightFront = hardwareMap.get(DcMotor.class, "RightFront");
         Flywheel = hardwareMap.get(DcMotorEx.class, "Flywheel");
         FeedTop = hardwareMap.get(CRServo.class, "TopFeed");
         FeedBottom = hardwareMap.get(CRServo.class, "BottomFeed");
         LaunchServo = hardwareMap.get(Servo.class, "launcherServo");
 
-        // same directions as Peak_Scrimage_Tele
-        LeftFront.setDirection(DcMotor.Direction.FORWARD);
+        // same per-motor directions as Peak_Scrimage_Tele, which works out to both left wheels REVERSE
+        // and both right wheels FORWARD by physical position
+        LeftFront.setDirection(DcMotor.Direction.REVERSE);   // config name "RightFront"
+        RightFront.setDirection(DcMotor.Direction.FORWARD);  // config name "LeftFront"
         LeftRear.setDirection(DcMotor.Direction.REVERSE);
-        RightFront.setDirection(DcMotor.Direction.REVERSE);
         RightRear.setDirection(DcMotor.Direction.FORWARD);
         Flywheel.setDirection(DcMotorSimple.Direction.REVERSE);
 
         for (DcMotor m : new DcMotor[]{LeftFront, LeftRear, RightFront, RightRear}) {
             m.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
             m.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            // plain power like the tele, encoders are only read for distance
             m.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         }
 
